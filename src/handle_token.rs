@@ -115,6 +115,13 @@ pub fn token_show_info(instructions: Vec<serde_json::Value>){
     let logger = Logger::new(String::from("Token handler"));
     for instruction in instructions {
         let tokens = get_tokens_info(instruction);
-        logger.log(format!("new pair found (Token: {} LP Pait: {})", &tokens.0.as_str().unwrap(), &tokens.2.as_str().unwrap()));
+        let token: &str;
+        if "So11111111111111111111111111111111111111112" == tokens.0.as_str().unwrap(){
+            token = &tokens.0.as_str().unwrap();
+        }else{
+            token = &tokens.1.as_str().unwrap();
+        }
+        let lp_pair = &tokens.2.as_str().unwrap();
+        logger.log(format!("new pair found (Token: {} LP Pair: {})", token, lp_pair));
     }
 }
