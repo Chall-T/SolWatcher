@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     logger.log(format!("Solana RPC http: {:?}", CONFIG.https_url.as_str()));
     logger.log(format!("Log instruction: {:?}", CONFIG.log_instruction.as_str()));
 
-    let ws_client = PubsubClient::new(CONFIG.wss_url.as_str()).await?;
+    let ws_client = PubsubClient::new(CONFIG.wss_url.as_str()).await.expect("Failed to create WebSocket client. Please check your URL or network connection.");
     let (mut stream, _) = ws_client
         .logs_subscribe(
             RpcTransactionLogsFilter::Mentions(vec![CONFIG.raydium_lpv4.to_string()]),
@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
                 commitment: Some(CommitmentConfig::finalized()),
             },
         )
-        .await?;
+        .await.expect("Failed to subscribe to logs. Check if the WebSocket is accessible.");
     
     logger.log("Subscribed to Raydium Liquidity Pool".to_string());
     loop {
@@ -77,7 +77,7 @@ async fn process_message(response: Response<RpcLogsResponse>) {
 async fn get_tokens(sign: &str, program: String) {
     let result = handle_token::get_transaction(sign, "jsonParsed", CONFIG.https_url.as_str())
         .await
-        .unwrap();
+        .expect("Failed to retrieve transaction data. Check the network or RPC server.");
 
     let instructions = handle_token::get_instructions_with_program_id(result, program);
     
