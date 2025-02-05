@@ -49,14 +49,21 @@ async fn main() -> Result<()> {
     logger.log(format!("Log instruction: {:?}", CONFIG.log_instruction.as_str()));
 
     let ws_client = PubsubClient::new(CONFIG.wss_url.as_str()).await.expect("Failed to create WebSocket client. Please check your URL or network connection.");
-    let (mut stream, _) = ws_client
-        .logs_subscribe(
-            RpcTransactionLogsFilter::Mentions(vec![CONFIG.raydium_lpv4.to_string()]),
-            RpcTransactionLogsConfig {
-                commitment: Some(CommitmentConfig::finalized()),
-            },
-        )
-        .await.expect("Failed to subscribe to logs. Check if the WebSocket is accessible.");
+    let (mut stream, _) = match ws_client
+            .logs_subscribe(
+                RpcTransactionLogsFilter::Mentions(vec![CONFIG.raydium_lpv4.to_string()]),
+                RpcTransactionLogsConfig {
+                    commitment: Some(CommitmentConfig::finalized()),
+                },
+            )
+            .await
+        {
+            Ok(result) => result,
+            Err(err) => {
+                logger.log(format!("Failed to subscribe to logs: {}", err));
+                return Err(anyhow::anyhow!("Failed to subscribe to logs").into());
+            }
+        };
     
     logger.log("Subscribed to Raydium Liquidity Pool".to_string());
     loop {
