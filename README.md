@@ -1,26 +1,40 @@
 <div align='center'>
 
 <h1>Raydium new pairs listener</h1>
-<p>A simple new pairs listener on Raydium written in Rust. </p>
+<p>A simple new pairs listener on Raydium (AMM v4 and optional CPMM) written in Rust.</p>
 
-<h4> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/blob/master/README.md"> Documentation </a> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Report Bug </a> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Request Feature </a> </h4>
+<h4> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Report Bug </a> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Request Feature </a> </h4>
 
 
 </div>
 
 
 ### :key: Environment Variables
-`SOL_HTTPS` - Custom Solana https RPC url
 
-`SOL_WSS` - Custom Solana wss RPC url
+Copy `.env.example` to `.env` and adjust. Main options:
 
+`SOL_HTTPS` / `SOL_WSS` — Solana RPC endpoints (use a dedicated provider for production)
+
+`WATCH_RAYDIUM_AMM` — listen for AMM v4 pools (default: true)
+
+`WATCH_RAYDIUM_CPMM` — listen for CPMM pools (default: false)
+
+`LOG_INSTRUCTION` — log filter for AMM v4 (default: `initialize2`)
+
+`CPMM_LOG_INSTRUCTION` — log filter for CPMM (default: `Instruction: Initialize`)
+
+`RPC_MIN_INTERVAL_MS` — delay between `getTransaction` calls (default: `250`)
+
+`LOG` — set to `debug` for RPC retry messages
+
+See `.env.example` for all variables.
 
 
 ## :toolbox: Getting Started
 
 ### Prerequisites
 
-- Rust<a href="https://www.rust-lang.org/tools/install"> Here</a>
+- Rust <a href="https://www.rust-lang.org/tools/install">install</a> (1.89+, see `rust-toolchain.toml`)
 
 
 ### :running: Run Locally
@@ -28,31 +42,29 @@
 Clone the project
 
 ```bash
-https://github.com/Chall-T/SolWatcher.git
+git clone https://github.com/Chall-T/SolWatcher.git
 ```
+
 Go to the project directory
+
 ```bash
 cd SolWatcher
 ```
-Install dependencies and run
+
+Configure environment and run
+
 ```bash
+cp .env.example .env
 cargo run
 ```
 
 ### Sample output
+
 ```console
-[2024-04-20 14:00:53] Setup Solana RPC websocket: "wss://api.mainnet-beta.solana.com"
-[2024-04-20 14:00:53] Setup Solana RPC http: "https://api.mainnet-beta.solana.com"
-[2024-04-20 14:00:53] Setup Log instruction: "initialize2"
-[2024-04-20 14:00:54] Setup Subscribed to Raydium Liquidity Pool
-[2024-04-20 14:03:31] Token handler [ERROR] No instructions found
-[2024-04-20 14:03:59] Token handler new pair found (Token: 3p8QX1F31JY2JSS3ZmHrmv2gCLR6GW6N9e9VPqUnkQx8 LP Pait: FnwaxPJMHWrZExhBoAoUuC7tNAmqpaBWQSszwLTpnWiq)
-[2024-04-20 14:03:59] Token handler new pair found (Token: 3p8QX1F31JY2JSS3ZmHrmv2gCLR6GW6N9e9VPqUnkQx8 LP Pait: FnwaxPJMHWrZExhBoAoUuC7tNAmqpaBWQSszwLTpnWiq)
-[2024-04-20 14:04:00] Token handler new pair found (Token: 3p8QX1F31JY2JSS3ZmHrmv2gCLR6GW6N9e9VPqUnkQx8 LP Pait: FnwaxPJMHWrZExhBoAoUuC7tNAmqpaBWQSszwLTpnWiq)
-[2024-04-20 14:04:23] Token handler new pair found (Token: NazyMKBTqc2JrVdPZfLt4CZkz2XzbCfdw7o2NQxaD9X LP Pait: 9XKuMdQf4qACvuLmzTaJYc31mfmn4Wp12G137kXAbmUs)
-[2024-04-20 14:04:23] Token handler [ERROR] No instructions found
-[2024-04-20 14:05:05] Token handler new pair found (Token: 5oDSP4eacy7VSecSEiYZbKbatbSXPvVBu6RZ4Yw1Wjjd LP Pait: 6FkvgvMJz5Au3fuJZfUrrSiM9jXetQVsvodVAiRwtACJ)
-[2024-04-20 14:08:26] Token handler [ERROR] No instructions found
-[2024-04-20 14:08:26] Token handler new pair found (Token: E8zy2EooUfKeoYQybKxX8aRzFcUGbpbXYxGbb2FnSWs5 LP Pait: EVxPQLVuXWZt7NBy6wQkcfh8ANtj3Dbpqua9bBCH4nY2)
-[2024-04-20 14:08:26] Token handler new pair found (Token: E8zy2EooUfKeoYQybKxX8aRzFcUGbpbXYxGbb2FnSWs5 LP Pait: EVxPQLVuXWZt7NBy6wQkcfh8ANtj3Dbpqua9bBCH4nY2)
+[2026-05-27 23:19:35] Setup Solana RPC websocket: "wss://api.mainnet-beta.solana.com"
+[2026-05-27 23:19:35] Setup Solana RPC http: "https://api.mainnet-beta.solana.com"
+[2026-05-27 23:19:35] Setup Watcher "AMM v4": program=675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8, log_pattern="initialize2"
+[AMM v4] Successfully connected to WebSocket.
+[AMM v4] Subscribed to Raydium program 675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8.
+[2026-05-27 23:20:01] AMM v4 new pair found (Token: ... LP Pair: ...)
 ```
