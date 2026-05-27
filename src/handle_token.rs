@@ -1,13 +1,13 @@
 use reqwest::header;
 use reqwest::Client;
 use serde_json::Value;
-use std::any::Any;
-use std::any::TypeId;
 use std::error::Error;
 use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::utils::Logger;
+
+const MAX_TX_FETCH_RETRIES: u32 = 30;
 
 pub async fn get_transaction(
     signature: &str,
@@ -19,6 +19,7 @@ pub async fn get_transaction(
     headers.insert("Content-Type", "application/json".parse().unwrap());
 
     let client = Client::new();
+    let mut attempts = 0u32;
     loop {
         let json_data = format!(
             "
@@ -44,16 +45,21 @@ pub async fn get_transaction(
 
         let body = response.text().await?;
         let body_json: Value = serde_json::from_str(body.as_str()).expect("Failed to parse JSON");
-        logger.debug(format!(
-            "getTransaction [\"result\"] type: {:?}, is type string: {:?}",
-            body_json["result"].type_id(),
-            body_json["result"].type_id() == TypeId::of::<String>()
-        ));
 
-        if body_json["result"].type_id() == TypeId::of::<String>() {
+        if let Some(error) = body_json.get("error") {
+            return Err(format!("RPC error for {signature}: {error}").into());
+        }
+
+        if body_json["result"].is_null() {
+            attempts += 1;
+            if attempts >= MAX_TX_FETCH_RETRIES {
+                return Err(format!(
+                    "transaction {signature} not available after {MAX_TX_FETCH_RETRIES} attempts"
+                )
+                .into());
+            }
             logger.debug(format!(
-                "Resending getTransaction request for \"{}\" signature",
-                signature
+                "Transaction not ready, retry {attempts}/{MAX_TX_FETCH_RETRIES} for \"{signature}\""
             ));
             sleep(Duration::from_secs(1)).await;
             continue;

@@ -7,7 +7,8 @@ use solana_client::{
     rpc_response::{Response, RpcLogsResponse},
 };
 use solana_sdk::commitment_config::CommitmentConfig;
-use std::sync::LazyLock;
+use std::collections::HashSet;
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
 pub mod handle_token;
@@ -39,6 +40,25 @@ impl Configuration {
     }
 }
 static CONFIG: LazyLock<Configuration> = LazyLock::new(Configuration::new);
+
+const MAX_SEEN_SIGNATURES: usize = 10_000;
+
+static SEEN_SIGNATURES: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+fn mark_signature_seen(signature: &str) -> bool {
+    let mut seen = SEEN_SIGNATURES
+        .lock()
+        .expect("signature cache lock poisoned");
+    if seen.contains(signature) {
+        return false;
+    }
+    if seen.len() >= MAX_SEEN_SIGNATURES {
+        seen.clear();
+    }
+    seen.insert(signature.to_string());
+    true
+}
 
 async fn start_subscriber() -> Result<()> {
     let mut attempts = 0;
@@ -114,20 +134,30 @@ async fn main() -> Result<()> {
 }
 async fn process_message(response: Response<RpcLogsResponse>) {
     let value = response.value;
-    for log in value.logs {
-        if !log.contains(CONFIG.log_instruction.as_str()) {
-            continue;
-        }
-        let signature_str = &value.signature;
-        get_tokens(signature_str, CONFIG.raydium_lpv4.to_string()).await;
+    let matches_instruction = value
+        .logs
+        .iter()
+        .any(|log| log.contains(CONFIG.log_instruction.as_str()));
+    if !matches_instruction {
+        return;
     }
+    if !mark_signature_seen(&value.signature) {
+        return;
+    }
+    get_tokens(&value.signature, CONFIG.raydium_lpv4.clone()).await;
 }
+
 async fn get_tokens(sign: &str, program: String) {
-    let result = handle_token::get_transaction(sign, "jsonParsed", CONFIG.https_url.as_str())
-        .await
-        .expect("Failed to retrieve transaction data. Check the network or RPC server.");
+    let logger = utils::Logger::new("Token handler".to_string());
+    let result =
+        match handle_token::get_transaction(sign, "jsonParsed", CONFIG.https_url.as_str()).await {
+            Ok(tx) => tx,
+            Err(e) => {
+                logger.error(format!("Failed to retrieve transaction {sign}: {e}"));
+                return;
+            }
+        };
 
     let instructions = handle_token::get_instructions_with_program_id(result, program);
-
     handle_token::token_show_info(instructions);
 }
