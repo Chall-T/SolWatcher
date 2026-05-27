@@ -1,9 +1,9 @@
 <div align='center'>
 
 <h1>Raydium new pairs listener</h1>
-<p>A simple new pairs listener on Raydium (AMM v4 and optional CPMM) written in Rust.</p>
+<p>A simple new pairs listener on Raydium (AMM v4 and CPMM) written in Rust.</p>
 
-<h4> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Report Bug </a> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Request Feature </a> </h4>
+<h4> <a href="https://github.com/Chall-T/SolWatcher/issues"> Report Bug </a> <span> · </span> <a href="https://github.com/Chall-T/SolWatcher/issues"> Request Feature </a> </h4>
 
 
 </div>
@@ -67,4 +67,5 @@ cargo run
 [AMM v4] Successfully connected to WebSocket.
 [AMM v4] Subscribed to Raydium program 675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8.
 [2026-05-27 23:20:01] AMM v4 new pair found (Token: ... LP Pair: ...)
+[2026-05-27 23:20:01] CPMM new pair found (Token: ... LP Pair: ...)
 ```
