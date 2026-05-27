@@ -34,7 +34,7 @@ See `.env.example` for all variables.
 
 ### Prerequisites
 
-- Rust <a href="https://www.rust-lang.org/tools/install">install</a> (1.85+, see `rust-toolchain.toml`)
+- Rust <a href="https://www.rust-lang.org/tools/install">install</a> (1.89+, see `rust-toolchain.toml`)
 
 
 ### :running: Run Locally
