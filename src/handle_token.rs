@@ -1,5 +1,3 @@
-use async_recursion::async_recursion;
-use async_std::task;
 use reqwest::header;
 use reqwest::Client;
 use serde_json::Value;
@@ -7,10 +5,10 @@ use std::any::Any;
 use std::any::TypeId;
 use std::error::Error;
 use std::time::Duration;
+use tokio::time::sleep;
 
 use crate::utils::Logger;
 
-#[async_recursion]
 pub async fn get_transaction(
     signature: &str,
     encoding: &str,
@@ -21,8 +19,9 @@ pub async fn get_transaction(
     headers.insert("Content-Type", "application/json".parse().unwrap());
 
     let client = Client::new();
-    let json_data = format!(
-        "
+    loop {
+        let json_data = format!(
+            "
     {{
         \"jsonrpc\": \"2.0\",
         \"id\": 1,
@@ -35,27 +34,33 @@ pub async fn get_transaction(
             }}
         ]
     }}"
-    );
-    let response = client
-        .post(http)
-        .headers(headers)
-        .body(json_data)
-        .send()
-        .await?;
+        );
+        let response = client
+            .post(http)
+            .headers(headers.clone())
+            .body(json_data)
+            .send()
+            .await?;
 
-    let body = response.text().await?;
-    
-    let mut body_json: Value = serde_json::from_str(body.as_str()).expect("Failed to parse JSON");
-    logger.debug(format!("getTransaction [\"result\"] type: {:?}, is type string: {:?}", body_json["result"].type_id(), body_json["result"].type_id() == TypeId::of::<String>()));
+        let body = response.text().await?;
+        let body_json: Value = serde_json::from_str(body.as_str()).expect("Failed to parse JSON");
+        logger.debug(format!(
+            "getTransaction [\"result\"] type: {:?}, is type string: {:?}",
+            body_json["result"].type_id(),
+            body_json["result"].type_id() == TypeId::of::<String>()
+        ));
 
-    if body_json["result"].type_id() == TypeId::of::<String>() {
-        
-        logger.debug(format!("Resending getTransaction request for \"{}\" signature", signature));
-        task::sleep(Duration::from_secs(1)).await;
-        body_json = get_transaction(signature, encoding, http).await.unwrap();
+        if body_json["result"].type_id() == TypeId::of::<String>() {
+            logger.debug(format!(
+                "Resending getTransaction request for \"{}\" signature",
+                signature
+            ));
+            sleep(Duration::from_secs(1)).await;
+            continue;
+        }
+
+        return Ok(body_json);
     }
-
-    Ok(body_json)
 }
 
 pub fn get_instructions(json: Value) -> Vec<serde_json::Value> {
@@ -96,15 +101,12 @@ pub fn get_tokens_info(
     (token0.clone(), token1.clone(), pair.clone())
 }
 
-pub fn token_show_info_detailed(instructions: Vec<serde_json::Value>){
+pub fn token_show_info_detailed(instructions: Vec<serde_json::Value>) {
     for instruction in instructions {
         let tokens = get_tokens_info(instruction);
         println!("Token0: {}", &tokens.0.as_str().unwrap().replace('\"', ""));
         println!("Token1: {}", &tokens.1.as_str().unwrap().replace('\"', ""));
-        println!(
-            "LP Pair: {}",
-            &tokens.2.as_str().unwrap().replace('\"', "")
-        );
+        println!("LP Pair: {}", &tokens.2.as_str().unwrap().replace('\"', ""));
         println!(
             "Dex: https://dexscreener.com/solana/{}",
             &tokens.2.as_str().unwrap().replace('\"', "")
@@ -113,20 +115,17 @@ pub fn token_show_info_detailed(instructions: Vec<serde_json::Value>){
 }
 const WSOL_MINT: &str = "So11111111111111111111111111111111111111112";
 
-pub fn token_show_info(instructions: Vec<serde_json::Value>){
+pub fn token_show_info(instructions: Vec<serde_json::Value>) {
     let logger = Logger::new(String::from("Token handler"));
     for instruction in instructions {
         let tokens = get_tokens_info(instruction);
         let token0 = tokens.0.as_str().unwrap();
         let token1 = tokens.1.as_str().unwrap();
-        let token = if token0 == WSOL_MINT {
-            token1
-        } else if token1 == WSOL_MINT {
-            token0
-        } else {
-            token0
-        };
+        let token = if token0 == WSOL_MINT { token1 } else { token0 };
         let lp_pair = tokens.2.as_str().unwrap();
-        logger.log(format!("new pair found (Token: {} LP Pair: {})", token, lp_pair));
+        logger.log(format!(
+            "new pair found (Token: {} LP Pair: {})",
+            token, lp_pair
+        ));
     }
 }

@@ -7,8 +7,9 @@ use solana_client::{
     rpc_response::{Response, RpcLogsResponse},
 };
 use solana_sdk::commitment_config::CommitmentConfig;
-use tokio::time::sleep;
+use std::sync::LazyLock;
 use std::time::Duration;
+use tokio::time::sleep;
 pub mod handle_token;
 pub mod utils;
 
@@ -37,11 +38,7 @@ impl Configuration {
         }
     }
 }
-lazy_static::lazy_static! {
-    static ref CONFIG: Configuration = Configuration::new();
-}
-
-
+static CONFIG: LazyLock<Configuration> = LazyLock::new(Configuration::new);
 
 async fn start_subscriber() -> Result<()> {
     let mut attempts = 0;
@@ -51,10 +48,13 @@ async fn start_subscriber() -> Result<()> {
 
         match ws_client_result {
             Ok(ws_client) => {
-                if attempts == 1{
+                if attempts == 1 {
                     println!("Successfully connected to WebSocket.");
-                }else{
-                    println!("Successfully connected to WebSocket after {} attempts.", attempts);
+                } else {
+                    println!(
+                        "Successfully connected to WebSocket after {} attempts.",
+                        attempts
+                    );
                 }
                 attempts = 0;
                 let (mut stream, _) = ws_client
@@ -81,10 +81,13 @@ async fn start_subscriber() -> Result<()> {
                 }
             }
             Err(e) => {
-                eprintln!("Failed to connect to WebSocket. Attempt {} of 10. Error: {}", attempts, e);
+                eprintln!(
+                    "Failed to connect to WebSocket. Attempt {} of 10. Error: {}",
+                    attempts, e
+                );
                 if attempts >= 10 {
                     eprintln!("Max reconnection attempts reached. Exiting...");
-                    return Err(anyhow::anyhow!("Max reconnection attempts reached").into());
+                    return Err(anyhow::anyhow!("Max reconnection attempts reached"));
                 }
                 sleep(Duration::from_secs(5)).await;
             }
@@ -97,9 +100,15 @@ async fn main() -> Result<()> {
     dotenv().ok();
     let logger = utils::Logger::new("Setup".to_string());
 
-    logger.log(format!("Solana RPC websocket: {:?}", CONFIG.wss_url.as_str()));
+    logger.log(format!(
+        "Solana RPC websocket: {:?}",
+        CONFIG.wss_url.as_str()
+    ));
     logger.log(format!("Solana RPC http: {:?}", CONFIG.https_url.as_str()));
-    logger.log(format!("Log instruction: {:?}", CONFIG.log_instruction.as_str()));
+    logger.log(format!(
+        "Log instruction: {:?}",
+        CONFIG.log_instruction.as_str()
+    ));
 
     start_subscriber().await
 }
@@ -110,7 +119,7 @@ async fn process_message(response: Response<RpcLogsResponse>) {
             continue;
         }
         let signature_str = &value.signature;
-        get_tokens(&signature_str, CONFIG.raydium_lpv4.to_string()).await;
+        get_tokens(signature_str, CONFIG.raydium_lpv4.to_string()).await;
     }
 }
 async fn get_tokens(sign: &str, program: String) {
@@ -119,8 +128,6 @@ async fn get_tokens(sign: &str, program: String) {
         .expect("Failed to retrieve transaction data. Check the network or RPC server.");
 
     let instructions = handle_token::get_instructions_with_program_id(result, program);
-    
-    
-    handle_token::token_show_info(instructions);
 
+    handle_token::token_show_info(instructions);
 }
