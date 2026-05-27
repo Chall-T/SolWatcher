@@ -1,72 +1,14 @@
-use reqwest::header;
-use reqwest::Client;
 use serde_json::Value;
-use std::error::Error;
-use std::time::Duration;
-use tokio::time::sleep;
 
+use crate::rpc::RPC;
 use crate::utils::Logger;
-
-const MAX_TX_FETCH_RETRIES: u32 = 30;
 
 pub async fn get_transaction(
     signature: &str,
     encoding: &str,
-    http: &str,
-) -> Result<Value, Box<dyn Error>> {
-    let logger = Logger::new(String::from("Token handler"));
-    let mut headers = header::HeaderMap::new();
-    headers.insert("Content-Type", "application/json".parse().unwrap());
-
-    let client = Client::new();
-    let mut attempts = 0u32;
-    loop {
-        let json_data = format!(
-            "
-    {{
-        \"jsonrpc\": \"2.0\",
-        \"id\": 1,
-        \"method\": \"getTransaction\",
-        \"params\": [
-            \"{signature}\",
-            {{
-                \"encoding\": \"{encoding}\",
-                \"maxSupportedTransactionVersion\": 0
-            }}
-        ]
-    }}"
-        );
-        let response = client
-            .post(http)
-            .headers(headers.clone())
-            .body(json_data)
-            .send()
-            .await?;
-
-        let body = response.text().await?;
-        let body_json: Value = serde_json::from_str(body.as_str()).expect("Failed to parse JSON");
-
-        if let Some(error) = body_json.get("error") {
-            return Err(format!("RPC error for {signature}: {error}").into());
-        }
-
-        if body_json["result"].is_null() {
-            attempts += 1;
-            if attempts >= MAX_TX_FETCH_RETRIES {
-                return Err(format!(
-                    "transaction {signature} not available after {MAX_TX_FETCH_RETRIES} attempts"
-                )
-                .into());
-            }
-            logger.debug(format!(
-                "Transaction not ready, retry {attempts}/{MAX_TX_FETCH_RETRIES} for \"{signature}\""
-            ));
-            sleep(Duration::from_secs(1)).await;
-            continue;
-        }
-
-        return Ok(body_json);
-    }
+    _http: &str,
+) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    RPC.get_transaction(signature, encoding).await
 }
 
 pub fn get_instructions(json: Value) -> Vec<serde_json::Value> {
@@ -81,7 +23,7 @@ pub fn get_instructions(json: Value) -> Vec<serde_json::Value> {
     instructions
 }
 
-pub fn get_instructions_with_program_id(json: Value, program_id: String) -> Vec<serde_json::Value> {
+pub fn get_instructions_with_program_id(json: Value, program_id: &str) -> Vec<serde_json::Value> {
     let mut filtred_instuctions = Vec::new();
 
     let instructions = get_instructions(json);
@@ -96,42 +38,4 @@ pub fn get_instructions_with_program_id(json: Value, program_id: String) -> Vec<
         }
     }
     filtred_instuctions
-}
-pub fn get_tokens_info(
-    instruction: serde_json::Value,
-) -> (serde_json::Value, serde_json::Value, serde_json::Value) {
-    let accounts = &instruction["accounts"];
-    let pair = &accounts[4];
-    let token0 = &accounts[8];
-    let token1 = &accounts[9];
-    (token0.clone(), token1.clone(), pair.clone())
-}
-
-pub fn token_show_info_detailed(instructions: Vec<serde_json::Value>) {
-    for instruction in instructions {
-        let tokens = get_tokens_info(instruction);
-        println!("Token0: {}", &tokens.0.as_str().unwrap().replace('\"', ""));
-        println!("Token1: {}", &tokens.1.as_str().unwrap().replace('\"', ""));
-        println!("LP Pair: {}", &tokens.2.as_str().unwrap().replace('\"', ""));
-        println!(
-            "Dex: https://dexscreener.com/solana/{}",
-            &tokens.2.as_str().unwrap().replace('\"', "")
-        );
-    }
-}
-const WSOL_MINT: &str = "So11111111111111111111111111111111111111112";
-
-pub fn token_show_info(instructions: Vec<serde_json::Value>) {
-    let logger = Logger::new(String::from("Token handler"));
-    for instruction in instructions {
-        let tokens = get_tokens_info(instruction);
-        let token0 = tokens.0.as_str().unwrap();
-        let token1 = tokens.1.as_str().unwrap();
-        let token = if token0 == WSOL_MINT { token1 } else { token0 };
-        let lp_pair = tokens.2.as_str().unwrap();
-        logger.log(format!(
-            "new pair found (Token: {} LP Pair: {})",
-            token, lp_pair
-        ));
-    }
 }
