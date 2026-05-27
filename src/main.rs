@@ -13,7 +13,6 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 
-pub mod handle_token;
 pub mod pool;
 pub mod rpc;
 pub mod utils;
@@ -192,7 +191,7 @@ async fn main() -> Result<()> {
     let _ = &*rpc::RPC;
     let _ = &*FETCH_TX;
 
-    let logger = utils::Logger::new("Setup".to_string());
+    let logger = utils::Logger::new("Setup");
 
     if CONFIG.watchers.is_empty() {
         return Err(anyhow::anyhow!(
@@ -200,13 +199,10 @@ async fn main() -> Result<()> {
         ));
     }
 
-    logger.log(format!(
-        "Solana RPC websocket: {:?}",
-        CONFIG.wss_url.as_str()
-    ));
-    logger.log(format!("Solana RPC http: {:?}", CONFIG.https_url.as_str()));
+    logger.log(&format!("Solana RPC websocket: {:?}", CONFIG.wss_url));
+    logger.log(&format!("Solana RPC http: {:?}", CONFIG.https_url));
     for watcher in &CONFIG.watchers {
-        logger.log(format!(
+        logger.log(&format!(
             "Watcher {:?}: program={}, log_pattern={:?}",
             watcher.label, watcher.program_id, watcher.log_instruction
         ));
@@ -243,7 +239,7 @@ async fn process_message(response: Response<RpcLogsResponse>, watcher: &PoolWatc
     };
     if let Err(error) = FETCH_TX.try_send(job) {
         let logger = utils::Logger::new(format!("{} handler", watcher.label));
-        logger.error(format!(
+        logger.error(&format!(
             "Fetch queue full, dropped {}: {}",
             value.signature, error
         ));
@@ -252,18 +248,16 @@ async fn process_message(response: Response<RpcLogsResponse>, watcher: &PoolWatc
 
 async fn get_tokens(sign: &str, watcher: &PoolWatcher) {
     let logger = utils::Logger::new(format!("{} handler", watcher.label));
-    let result =
-        match handle_token::get_transaction(sign, "jsonParsed", CONFIG.https_url.as_str()).await {
-            Ok(tx) => tx,
-            Err(e) => {
-                logger.error(format!("Failed to retrieve transaction {sign}: {e}"));
-                return;
-            }
-        };
+    let tx = match rpc::RPC.get_transaction(sign, "jsonParsed").await {
+        Ok(tx) => tx,
+        Err(e) => {
+            logger.error(&format!("Failed to retrieve transaction {sign}: {e}"));
+            return;
+        }
+    };
 
-    let instructions = handle_token::get_instructions_with_program_id(result, &watcher.program_id);
-    if instructions.is_empty() {
-        return;
+    let instructions = pool::matching_instructions(&tx, &watcher.program_id);
+    if !instructions.is_empty() {
+        pool::token_show_info(instructions, watcher.layout, watcher.label);
     }
-    pool::token_show_info(instructions, watcher.layout, watcher.label);
 }

@@ -6,9 +6,7 @@ const WSOL_MINT: &str = "So11111111111111111111111111111111111111112";
 
 #[derive(Clone, Copy, Debug)]
 pub enum PoolLayout {
-    /// Raydium AMM v4 `initialize2`
     AmmV4,
-    /// Raydium CPMM `Initialize`
     Cpmm,
 }
 
@@ -24,10 +22,21 @@ impl PoolLayout {
 
 pub fn log_matches_instruction(log: &str, pattern: &str, layout: PoolLayout) -> bool {
     match layout {
-        // Avoid matching SPL Token "InitializeAccount" etc. (substring of "Initialize").
-        PoolLayout::Cpmm => log.ends_with(pattern) && !log.contains("InitializeWithPermission"),
+        PoolLayout::Cpmm => log.ends_with(pattern),
         PoolLayout::AmmV4 => log.contains(pattern),
     }
+}
+
+pub fn matching_instructions(tx: &Value, program_id: &str) -> Vec<Value> {
+    let Some(instructions) = tx["result"]["transaction"]["message"]["instructions"].as_array()
+    else {
+        return Vec::new();
+    };
+    instructions
+        .iter()
+        .filter(|ix| ix["programId"].as_str() == Some(program_id))
+        .cloned()
+        .collect()
 }
 
 pub fn get_pool_tokens_info(
@@ -56,10 +65,14 @@ pub fn token_show_info(instructions: Vec<Value>, layout: PoolLayout, label: &str
     let logger = Logger::new(label.to_string());
     for instruction in instructions {
         let Some((token0, token1, pool)) = get_pool_tokens_info(instruction, layout) else {
-            logger.error("Could not read pool accounts from instruction".to_string());
+            logger.error("Could not read pool accounts from instruction");
             continue;
         };
-        let token = if token0 == WSOL_MINT { &token1 } else { &token0 };
-        logger.log(format!("new pair found (Token: {token} LP Pair: {pool})"));
+        let token = if token0 == WSOL_MINT {
+            &token1
+        } else {
+            &token0
+        };
+        logger.log(&format!("new pair found (Token: {token} LP Pair: {pool})"));
     }
 }

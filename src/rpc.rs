@@ -1,7 +1,6 @@
-use reqwest::header;
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::Client;
-use serde_json::Value;
-use std::error::Error;
+use serde_json::{json, Value};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -15,8 +14,9 @@ const MAX_RATE_LIMIT_RETRIES: u32 = 8;
 pub static RPC: LazyLock<RpcClient> = LazyLock::new(RpcClient::from_env);
 
 pub struct RpcClient {
-    url: String,
     http: Client,
+    headers: HeaderMap,
+    url: String,
     min_interval: Duration,
     last_request: Mutex<Instant>,
 }
@@ -27,56 +27,50 @@ impl RpcClient {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(250);
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
         RpcClient {
             url: std::env::var("SOL_HTTPS")
                 .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()),
             http: Client::new(),
+            headers,
             min_interval: Duration::from_millis(min_interval_ms),
             last_request: Mutex::new(Instant::now() - Duration::from_secs(1)),
         }
     }
 
-    pub async fn get_transaction(
-        &self,
-        signature: &str,
-        encoding: &str,
-    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        let logger = Logger::new("RPC".to_string());
-        let mut headers = header::HeaderMap::new();
-        headers.insert("Content-Type", "application/json".parse().unwrap());
-
+    pub async fn get_transaction(&self, signature: &str, encoding: &str) -> Result<Value, String> {
+        let logger = Logger::new("RPC");
         let mut null_attempts = 0u32;
         let mut rate_limit_attempts = 0u32;
 
         loop {
             self.throttle().await;
 
-            let json_data = format!(
-                r#"{{
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "getTransaction",
-        "params": [
-            "{signature}",
-            {{
-                "encoding": "{encoding}",
-                "maxSupportedTransactionVersion": 0
-            }}
-        ]
-    }}"#
-            );
+            let body = json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTransaction",
+                "params": [
+                    signature,
+                    {
+                        "encoding": encoding,
+                        "maxSupportedTransactionVersion": 0
+                    }
+                ]
+            });
 
             let response = self
                 .http
                 .post(&self.url)
-                .headers(headers.clone())
-                .body(json_data)
+                .headers(self.headers.clone())
+                .json(&body)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| e.to_string())?;
 
-            let body = response.text().await?;
-            let body_json: Value =
-                serde_json::from_str(body.as_str()).expect("Failed to parse JSON");
+            let body_json: Value = response.json().await.map_err(|e| e.to_string())?;
 
             if let Some(error) = body_json.get("error") {
                 if is_rate_limited(error) {
@@ -84,18 +78,17 @@ impl RpcClient {
                     if rate_limit_attempts >= MAX_RATE_LIMIT_RETRIES {
                         return Err(format!(
                             "rate limited fetching {signature} after {MAX_RATE_LIMIT_RETRIES} retries"
-                        )
-                        .into());
+                        ));
                     }
                     let backoff = Duration::from_millis(500 * 2u64.pow(rate_limit_attempts - 1));
-                    logger.debug(format!(
+                    logger.debug(&format!(
                         "RPC 429, backing off {:?} ({rate_limit_attempts}/{MAX_RATE_LIMIT_RETRIES})",
                         backoff
                     ));
                     sleep(backoff).await;
                     continue;
                 }
-                return Err(format!("RPC error for {signature}: {error}").into());
+                return Err(format!("RPC error for {signature}: {error}"));
             }
 
             rate_limit_attempts = 0;
@@ -105,10 +98,9 @@ impl RpcClient {
                 if null_attempts >= MAX_TX_FETCH_RETRIES {
                     return Err(format!(
                         "transaction {signature} not available after {MAX_TX_FETCH_RETRIES} attempts"
-                    )
-                    .into());
+                    ));
                 }
-                logger.debug(format!(
+                logger.debug(&format!(
                     "Transaction not ready, retry {null_attempts}/{MAX_TX_FETCH_RETRIES} for \"{signature}\""
                 ));
                 sleep(Duration::from_secs(1)).await;
