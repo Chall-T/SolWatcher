@@ -67,5 +67,5 @@ cargo run
 [AMM v4] Successfully connected to WebSocket.
 [AMM v4] Subscribed to Raydium program 675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8.
 [2026-05-27 23:20:01] AMM v4 new pair found (Token: ... LP Pair: ...)
-[2026-05-27 23:20:01] CPMM new pair found (Token: ... LP Pair: ...)
+[2026-05-27 23:22:34] CPMM new pair found (Token: ... LP Pair: ...)
 ```
